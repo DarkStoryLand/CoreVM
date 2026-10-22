@@ -1,0 +1,158 @@
+# ==============================================================================
+# DarkStory LAND - High-Performance Linux Ubuntu Server Stack
+# Tuned for High Concurrency (1,000+ Concurrent Players per Server Channel)
+# Optimizations:
+#   1. Microsoft SQL Server 2019: RCSI Zero-Lock Concurrency + TempDB Multi-file
+#   2. Wine-staging Server Cluster: WINEESYNC=1 Kernel Eventfd Lock Bypass
+#   3. Network Stack: 65,535 Socket Descriptors + 65,535 TCP Connection Backlog
+#   4. Supervisord Web Management Dashboard (Port 9001, localhost only)
+#
+# Secrets live in docker/.env (copy .env.example, never commit .env).
+# Only player-facing ports are published publicly; admin ports bind to 127.0.0.1
+# (reach them through an SSH tunnel: ssh -L 9001:127.0.0.1:9001 user@server).
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Database Engine: Microsoft SQL Server on Linux
+  # ----------------------------------------------------------------------------
+  mssql:
+    image: ${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2019-CU32-GDR12-ubuntu-20.04}
+    container_name: darkstory_mssql
+    hostname: mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in docker/.env}
+      - MSSQL_PID=Developer
+    ports:
+      # Local admin tools only (SSMS through an SSH tunnel); never expose 1433 publicly
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ../db:/var/opt/mssql/backup:ro
+      - mssql_auto_backups:/var/opt/mssql/auto_backups
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      # Newer images ship mssql-tools18 (needs -C); older ones mssql-tools
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 2. Game Server Cluster: DistributeServer, AgentServer, MapServer x45
+  # ----------------------------------------------------------------------------
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: darkstory_server
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      - DB_HOST=mssql
+      - DB_PORT=1433
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in docker/.env}
+      - GAMESRV_PASSWORD=${GAMESRV_PASSWORD:?Set GAMESRV_PASSWORD in docker/.env}
+      - SUPERVISOR_PASSWORD=${SUPERVISOR_PASSWORD:?Set SUPERVISOR_PASSWORD in docker/.env}
+      - MAP_SERVER_IDS=${MAP_SERVER_IDS:-}
+      - WINEESYNC=1
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    ports:
+      # Player-facing: Distribute (login gateway) and Agent user ports
+      - "14400:14400"
+      - "14600-14602:14600-14602"
+      # Admin only: RMTool GM port and Supervisord dashboard
+      - "127.0.0.1:20034:20034"
+      - "127.0.0.1:9001:9001"
+      # Server-to-server ports (16001, 17001-17003, 18001-18108, 19001, 20001-20004)
+      # stay inside the container and are intentionally not published.
+    volumes:
+      - ../SWorking:/server/SWorking
+      - ./logs:/server/logs
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 3. Web Portal, ItemMall, Top-up, Back-Office & API (Node.js)
+  #    Mounts the sibling Web repo (F:\DarkStory\Web or ../../Web on Linux).
+  # ----------------------------------------------------------------------------
+  web:
+    image: node:24-alpine
+    container_name: darkstory_web
+    working_dir: /app
+    volumes:
+      - ../../Web:/app
+    environment:
+      - PORT=3000
+      - GAME_SERVER_HOST=server
+      - GAME_SERVER_PORT=14400
+      - WEB_CLIENT_URL=https://play.darkstoryland.com
+      - MSSQL_HOST=mssql
+      - MSSQL_PORT=1433
+      - MSSQL_USER=GameSrv
+      - MSSQL_PASSWORD=${GAMESRV_PASSWORD:?Set GAMESRV_PASSWORD in docker/.env}
+      # Behind nginx: take the client IP from X-Forwarded-For
+      - TRUST_PROXY=1
+    # Web/.env (PromptPay, EasySlip, Discord...) is loaded if present
+    command: node --env-file-if-exists=.env server.js
+    depends_on:
+      mssql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 4. WebClient & WebSocket Proxy (DSL Web Engine 60 FPS)
+  # ----------------------------------------------------------------------------
+  webclient:
+    image: node:24-alpine
+    container_name: darkstory_webclient
+    working_dir: /app
+    volumes:
+      - ../../WebClient:/app
+    environment:
+      - PORT=8080
+      - GAME_SERVER_HOST=server
+      - GAME_SERVER_PORT=14400
+      - GAME_SERVER_PORTS=14400,14600,14601,14602
+      - ALLOWED_WS_ORIGINS=https://play.darkstoryland.com,https://s.darkstoryland.com
+    command: node --env-file-if-exists=.env server/server.js
+    depends_on:
+      - server
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 5. Nginx Subdomain Reverse Proxy (Let's Encrypt SSL & CDN Caching)
+  # ----------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: darkstory_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx_subdomains.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - web
+      - webclient
+      - server
+    restart: unless-stopped
+
+volumes:
+  mssql_data:
+    driver: local
+  mssql_auto_backups:
+    driver: local
