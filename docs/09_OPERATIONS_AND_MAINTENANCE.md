@@ -1,5 +1,8 @@
 # 09. Day-2 Operations & Emergency Runbook
 
+For the existing local `dsl-test` VM, its private stage profiles, cold-start checks,
+and the difference from the CoreKeys endpoint, use [Local DSL test startup](11_LOCAL_DSL_TEST_STARTUP.md).
+
 ## 1. Common Operational Commands
 
 ### Checking Stack Status
