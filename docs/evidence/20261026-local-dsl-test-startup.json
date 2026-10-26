@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-26T14:10:21.644857+00:00",
+  "host": "192.168.188.135",
+  "profile": "isolated-npc",
+  "strictSSHExit": 0,
+  "strictHostKeyChecking": true,
+  "rawLogsExported": false,
+  "gameWindowControlled": false,
+  "loginGameplayTested": false,
+  "remote": {
+    "hostname": "dsl-test",
+    "containers": [
+      {
+        "name": "dsl-origin-npc-mssql-20261024",
+        "status": "running",
+        "running": true,
+        "restartPolicy": "no"
+      },
+      {
+        "name": "dsl-origin-npc-qa-20261024",
+        "status": "running",
+        "running": true,
+        "restartPolicy": "no"
+      },
+      {
+        "name": "dsl-origin-mssql-20261023",
+        "status": "exited",
+        "running": false,
+        "restartPolicy": "no"
+      },
+      {
+        "name": "dsl-origin-server-20261023",
+        "status": "exited",
+        "running": false,
+        "restartPolicy": "no"
+      }
+    ],
+    "programs": {
+      "distribute": "RUNNING",
+      "agent": "RUNNING",
+      "map1": "RUNNING"
+    },
+    "mapStateCounts": {
+      "RUNNING": 1,
+      "STOPPED": 86
+    },
+    "ownLoginQueryExit": 0,
+    "ownLoginRows": 0,
+    "display": {
+      "xvfbPIDs": [
+        772
+      ],
+      "displaySocketConnects": true
+    },
+    "componentHashes": {
+      "SWorking/MapServer.exe": "67e1a403b5504caa9385b4695e8145a255fd8ea387f51f6cfa45411612630c5a",
+      "SWorking/AgentServer.exe": "59697c7df30aae7568b146ae66c983f25e8ec9440569a2adcf0e44d65fbc0bd3",
+      "SWorking/DistributeServer.exe": "af4c34ae80bda1955950d563f7f998c7c264550e5c5bee81e611b6043ba0038e",
+      "supervisord.conf": "6cf9588453b939128aca17baddaa2f2d1de51c7e83ca663f284bfd55fabffa86",
+      "start.sh": "6e4a757037aa4d89561ec18dfa96c1c565c1a32ceb6376031de2cd1e1c7a94f1",
+      "wine_odbc.reg": "576869eef4eae370dcf7776294de9f4647d97590c019ec6afcf7114a31b33d6e"
+    }
+  },
+  "tcp": [
+    {
+      "port": 22,
+      "open": true
+    },
+    {
+      "port": 34400,
+      "open": true
+    },
+    {
+      "port": 34600,
+      "open": true
+    },
+    {
+      "port": 24400,
+      "open": false
+    },
+    {
+      "port": 24600,
+      "open": false
+    },
+    {
+      "port": 35400,
+      "open": false
+    },
+    {
+      "port": 35600,
+      "open": false
+    }
+  ],
+  "vm": {
+    "exactDslVmxRunning": true,
+    "preexistingOtherVmPreserved": true
+  },
+  "recovery": {
+    "databaseFirst": true,
+    "databasesReadinessOnline": [
+      "MHCMEMBER",
+      "MHGAME",
+      "MHLOG"
+    ],
+    "initialProgramsFatal": [
+      "distribute",
+      "agent"
+    ],
+    "initialDisplayAbsent": true,
+    "staleXLockOwnerPID": 7,
+    "staleXLockOwnerProcessAbsent": true,
+    "removedOnly": [
+      "/tmp/.X99-lock",
+      "/tmp/.X11-unix/X99"
+    ],
+    "xvfbArgs": [
+      ":99",
+      "-screen",
+      "0",
+      "1024x768x16",
+      "-nolisten",
+      "tcp"
+    ],
+    "componentHashesUnchangedAcrossRepair": true,
+    "sqlWritesIssuedByOperator": false,
+    "databaseEngineAndNativeBootMayWrite": true,
+    "otherMapsStarted": false
+  }
+}
